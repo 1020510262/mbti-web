@@ -14,11 +14,13 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState("");
+  const [downloadHint, setDownloadHint] = useState("");
 
   const handleDownload = async () => {
     if (!ref.current) return;
     setDownloading(true);
     setDownloadError("");
+    setDownloadHint("");
     let captureNode: HTMLDivElement | null = null;
     let objectUrl = "";
     try {
@@ -57,9 +59,28 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
       }
 
       objectUrl = URL.createObjectURL(blob);
+      const filename = `MBTI-${type}.png`;
+
+      // Fix iOS Safari download issue: prefer native share sheet; fallback to opening image in new tab for long-press save.
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        const file = new File([blob], filename, { type: "image/png" });
+        if (navigator.share && navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          URL.revokeObjectURL(objectUrl);
+          objectUrl = "";
+          return;
+        }
+        window.open(objectUrl, "_blank", "noopener,noreferrer");
+        setDownloadHint("已在新页面打开图片，请长按图片后选择“存储到照片”。");
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+        objectUrl = "";
+        return;
+      }
+
       const link = document.createElement("a");
       link.href = objectUrl;
-      link.download = `MBTI-${type}.png`;
+      link.download = filename;
       link.rel = "noopener";
       document.body.appendChild(link);
       link.click();
@@ -111,6 +132,7 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
       >
         {downloading ? "正在生成图片..." : "下载结果图"}
       </button>
+      {downloadHint && <p className="text-xs text-slate-500">{downloadHint}</p>}
       {downloadError && <p className="text-xs text-rose-500">{downloadError}</p>}
     </div>
   );

@@ -17,11 +17,35 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
   const handleDownload = async () => {
     if (!ref.current) return;
     setDownloading(true);
+    let captureNode: HTMLDivElement | null = null;
     try {
-      const canvas = await html2canvas(ref.current, {
+      // Clone to an offscreen node so screenshot size is stable and won't be clipped by viewport/layout state.
+      captureNode = ref.current.cloneNode(true) as HTMLDivElement;
+      captureNode.style.position = "fixed";
+      captureNode.style.left = "-99999px";
+      captureNode.style.top = "0";
+      captureNode.style.width = "720px";
+      captureNode.style.maxWidth = "720px";
+      captureNode.style.overflow = "visible";
+      captureNode.style.transform = "none";
+      captureNode.style.opacity = "1";
+      document.body.appendChild(captureNode);
+
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+
+      const canvas = await html2canvas(captureNode, {
         backgroundColor: "#ffffff",
         scale: 2,
-        useCORS: true
+        useCORS: true,
+        width: captureNode.scrollWidth,
+        height: captureNode.scrollHeight,
+        windowWidth: captureNode.scrollWidth,
+        windowHeight: captureNode.scrollHeight,
+        scrollX: 0,
+        scrollY: 0
       });
       const url = canvas.toDataURL("image/png");
       const link = document.createElement("a");
@@ -29,6 +53,9 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
       link.download = `MBTI-${type}.png`;
       link.click();
     } finally {
+      if (captureNode && captureNode.parentNode) {
+        captureNode.parentNode.removeChild(captureNode);
+      }
       setDownloading(false);
     }
   };
@@ -47,7 +74,7 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
         <p className="text-sm text-slate-700">我的MBTI测试结果</p>
         <h3 className="mt-2 text-4xl font-black text-slate-900">{type}</h3>
         <p className="mt-1 text-lg font-semibold text-slate-700">{title}</p>
-        <p className="mt-4 max-h-[120px] overflow-hidden text-sm leading-6 text-slate-700">{summary}</p>
+        <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{summary}</p>
         <div className="mt-5 inline-flex rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-slate-700">
           MBTI FUN TEST 2026
         </div>

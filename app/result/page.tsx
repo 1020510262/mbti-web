@@ -7,7 +7,6 @@ import { motion } from "framer-motion";
 import { getProfile } from "@/lib/mbti/profiles";
 import { useQuizStore } from "@/store/quiz-store";
 import { ShareCard } from "@/components/result/ShareCard";
-import { MODEL_REQUIRED_FIELDS } from "@/lib/config/model";
 import { PRICING_CONFIG } from "@/lib/config/pricing";
 import { confirmPayment, createOrder, generateAdvancedReport, generateBasicReport } from "@/lib/ai/report-client";
 import { AIReport, GenerationState, PaymentProvider, ProfileInput } from "@/lib/ai/report-types";
@@ -96,6 +95,10 @@ function ResultContent() {
   const [showDrawer, setShowDrawer] = useState(false);
   const [profileInput, setProfileInput] = useState<ProfileInput>({});
   const canGenerate = Boolean(result);
+  const isBasicBusy = basicState === "creating_order" || basicState === "paying" || basicState === "generating";
+  const isAdvancedBusy = advancedState === "creating_order" || advancedState === "paying" || advancedState === "generating";
+  const basicReady = Boolean(basicReport) && basicState === "ready";
+  const advancedReady = Boolean(advancedReport) && advancedState === "ready";
 
   const basicPriceLabel = PRICING_CONFIG.displayOriginalPrice
     ? `原价¥${PRICING_CONFIG.basicOriginalCny}，限时0元体验`
@@ -105,6 +108,8 @@ function ResultContent() {
     : "限时0元体验";
 
   const handleGenerateBasic = async () => {
+    // Fix Bug #5: lock duplicate clicks while request is in flight or report already exists.
+    if (isBasicBusy || basicReady) return;
     if (!result) {
       setBasicError("当前会话缺少分数数据，请从测试页完成一次作答后再生成。");
       return;
@@ -131,6 +136,8 @@ function ResultContent() {
   };
 
   const handleGenerateAdvanced = async () => {
+    // Fix Bug #5: lock duplicate clicks while request is in flight or report already exists.
+    if (isAdvancedBusy || advancedReady) return;
     if (!result) {
       setAdvancedError("当前会话缺少分数数据，请从测试页完成一次作答后再生成。");
       return;
@@ -255,10 +262,10 @@ function ResultContent() {
             <button
               type="button"
               onClick={handleGenerateBasic}
-              disabled={basicState === "creating_order" || basicState === "paying" || basicState === "generating" || !canGenerate}
+              disabled={isBasicBusy || !canGenerate || basicReady}
               className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {basicState === "idle" || basicState === "failed" ? "解锁AI深度解读" : stateText[basicState]}
+              {basicReady ? "已生成基础报告" : (basicState === "idle" || basicState === "failed" ? "解锁AI深度解读" : stateText[basicState])}
             </button>
             {basicState === "failed" && (
               <button
@@ -267,6 +274,18 @@ function ResultContent() {
                 className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
               >
                 重新生成（不重复扣费）
+              </button>
+            )}
+            {basicReady && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBasicReport(null);
+                  setBasicState("idle");
+                }}
+                className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+              >
+                重新生成
               </button>
             )}
           </div>
@@ -278,18 +297,21 @@ function ResultContent() {
         {basicReport && (
           <>
             <ReportBlock title="基础AI报告（600字）" report={basicReport} />
-            <div className="mt-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
-              <p className="text-sm font-semibold text-indigo-900">想更个性化？</p>
-              <p className="mt-1 text-xs text-indigo-700">补充年龄段、职业和当前阶段，可解锁更细化的未来规划与职业分析。</p>
-              <p className="mt-1 text-xs text-indigo-700">{advancedPriceLabel}</p>
-              <button
-                type="button"
-                onClick={() => setShowDrawer(true)}
-                className="mt-3 rounded-2xl bg-indigo-700 px-4 py-2 text-sm font-semibold text-white"
-              >
-                补充信息，生成增强版报告
-              </button>
-            </div>
+            {/* Fix Bug #4: hide purchase prompt after advanced report has been generated. */}
+            {!advancedReport && (
+              <div className="mt-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                <p className="text-sm font-semibold text-indigo-900">想更个性化？</p>
+                <p className="mt-1 text-xs text-indigo-700">补充年龄段、职业和当前阶段，可解锁更细化的未来规划与职业分析。</p>
+                <p className="mt-1 text-xs text-indigo-700">{advancedPriceLabel}</p>
+                <button
+                  type="button"
+                  onClick={() => setShowDrawer(true)}
+                  className="mt-3 rounded-2xl bg-indigo-700 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  补充信息，生成增强版报告
+                </button>
+              </div>
+            )}
           </>
         )}
 
@@ -297,8 +319,8 @@ function ResultContent() {
         {advancedError && <p className="mt-2 text-xs text-rose-500">{advancedError}</p>}
 
         <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-3 text-xs text-slate-500">
+          {/* Fix Bug #1: keep only compliance note, remove all config/debug text from UI. */}
           <p>合规提示：内容仅用于娱乐与自我探索，不构成心理诊断或职业专业建议。</p>
-          <p className="mt-1">模型接入待配置项：{MODEL_REQUIRED_FIELDS.join(" / ")}</p>
         </div>
       </motion.section>
 
@@ -324,8 +346,9 @@ function ResultContent() {
       </motion.section>
 
       {showDrawer && (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/40" role="dialog" aria-modal="true">
-          <div className="w-full rounded-t-3xl bg-white p-5 shadow-2xl sm:mx-auto sm:max-w-xl">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          {/* Fix Bug #3: center modal with backdrop instead of bottom sheet layout. */}
+          <div className="w-full max-w-xl rounded-3xl bg-white p-5 shadow-2xl">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">补充信息（可选）</h3>
               <button type="button" onClick={() => setShowDrawer(false)} className="text-sm text-slate-500">关闭</button>
@@ -405,12 +428,24 @@ function ResultContent() {
               <button
                 type="button"
                 onClick={handleGenerateAdvanced}
-                disabled={advancedState === "creating_order" || advancedState === "paying" || advancedState === "generating"}
+                disabled={isAdvancedBusy || advancedReady}
                 className="rounded-2xl bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {advancedState === "idle" || advancedState === "failed" ? "确认并生成增强版" : stateText[advancedState]}
+                {advancedReady ? "已生成增强报告" : (advancedState === "idle" || advancedState === "failed" ? "确认并生成增强版" : stateText[advancedState])}
               </button>
             </div>
+            {advancedReady && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAdvancedReport(null);
+                  setAdvancedState("idle");
+                }}
+                className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+              >
+                重新生成增强版
+              </button>
+            )}
             <p className="mt-2 text-center text-xs text-slate-500">{advancedPriceLabel}</p>
           </div>
         </div>

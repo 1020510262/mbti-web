@@ -22,20 +22,15 @@ export default function HomePage() {
         <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-600">
           64 道题，约 6-10 分钟。完成后立刻解锁你的四字人格、有梗解读、优缺点雷达，还有可下载分享图。
         </p>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+        {/* Fix Bug #6: keep only one primary CTA to reduce distraction. */}
+        <div className="mt-8 flex justify-center">
           <Link
             href="/quiz"
             onClick={() => reset()}
-            className="rounded-2xl bg-slate-900 px-6 py-3 text-lg font-semibold text-white transition hover:opacity-90"
+            className="rounded-2xl bg-slate-900 px-10 py-3 text-lg font-semibold text-white transition hover:opacity-90"
           >
             开始测试
           </Link>
-          <a
-            href="#how"
-            className="rounded-2xl border border-slate-300 bg-white px-6 py-3 text-lg font-semibold text-slate-700 transition hover:bg-slate-50"
-          >
-            先看说明
-          </a>
         </div>
       </motion.section>
 

@@ -13,11 +13,14 @@ interface ShareCardProps {
 export function ShareCard({ type, title, summary }: ShareCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
 
   const handleDownload = async () => {
     if (!ref.current) return;
     setDownloading(true);
+    setDownloadError("");
     let captureNode: HTMLDivElement | null = null;
+    let objectUrl = "";
     try {
       // Clone to an offscreen node so screenshot size is stable and won't be clipped by viewport/layout state.
       captureNode = ref.current.cloneNode(true) as HTMLDivElement;
@@ -47,14 +50,35 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
         scrollX: 0,
         scrollY: 0
       });
-      const url = canvas.toDataURL("image/png");
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+      if (!blob) {
+        throw new Error("canvas blob generation failed");
+      }
+
+      objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = url;
+      link.href = objectUrl;
       link.download = `MBTI-${type}.png`;
+      link.rel = "noopener";
+      document.body.appendChild(link);
       link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+      objectUrl = "";
+    } catch (error) {
+      // Fix Bug #2: explicit error handling with user-visible feedback.
+      console.error("[share-card] download failed", error);
+      setDownloadError("生成图片失败，请稍后重试或直接截图保存。");
+      if (typeof window !== "undefined") {
+        window.alert("生成图片失败，请稍后重试或直接截图保存。");
+      }
     } finally {
       if (captureNode && captureNode.parentNode) {
         captureNode.parentNode.removeChild(captureNode);
+      }
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
       }
       setDownloading(false);
     }
@@ -87,6 +111,7 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
       >
         {downloading ? "正在生成图片..." : "下载结果图"}
       </button>
+      {downloadError && <p className="text-xs text-rose-500">{downloadError}</p>}
     </div>
   );
 }

@@ -13,17 +13,13 @@ interface ShareCardProps {
 export function ShareCard({ type, title, summary }: ShareCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [downloadError, setDownloadError] = useState("");
   const [downloadHint, setDownloadHint] = useState("");
 
-  const handleDownload = async () => {
-    if (!ref.current) return;
-    setDownloading(true);
-    setDownloadError("");
-    setDownloadHint("");
+  const captureAsBlob = async (): Promise<Blob> => {
+    if (!ref.current) throw new Error("share card not ready");
     let captureNode: HTMLDivElement | null = null;
-    let objectUrl = "";
-    let popup: Window | null = null;
     try {
       // Clone to an offscreen node so screenshot size is stable and won't be clipped by viewport/layout state.
       captureNode = ref.current.cloneNode(true) as HTMLDivElement;
@@ -58,7 +54,23 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
       if (!blob) {
         throw new Error("canvas blob generation failed");
       }
+      return blob;
+    } finally {
+      if (captureNode && captureNode.parentNode) {
+        captureNode.parentNode.removeChild(captureNode);
+      }
+    }
+  };
 
+  const handleDownload = async () => {
+    if (!ref.current) return;
+    setDownloading(true);
+    setDownloadError("");
+    setDownloadHint("");
+    let objectUrl = "";
+    let popup: Window | null = null;
+    try {
+      const blob = await captureAsBlob();
       objectUrl = URL.createObjectURL(blob);
       const filename = `MBTI-${type}.png`;
       // Keep a popup handle created by user interaction to avoid async popup blocking on some browsers.
@@ -107,10 +119,33 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
         setDownloadHint("浏览器拦截了直接下载，已打开图片页，请长按或右键保存。");
       }
     } finally {
-      if (captureNode && captureNode.parentNode) {
-        captureNode.parentNode.removeChild(captureNode);
-      }
       setDownloading(false);
+    }
+  };
+
+  const handleOpenImagePage = async () => {
+    if (!ref.current) return;
+    setOpening(true);
+    setDownloadError("");
+    setDownloadHint("");
+    let objectUrl = "";
+    try {
+      // Fix iOS save path: explicit open-image action for long-press save.
+      const blob = await captureAsBlob();
+      objectUrl = URL.createObjectURL(blob);
+      const opened = window.open(objectUrl, "_blank", "noopener,noreferrer");
+      if (!opened) {
+        throw new Error("popup blocked");
+      }
+      setDownloadHint("新页面已打开，请长按图片后选择“存储到照片/图片另存为”。");
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      objectUrl = "";
+    } catch (error) {
+      console.error("[share-card] open image page failed", error);
+      setDownloadError("打开图片页失败，请检查浏览器弹窗权限后重试。");
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setOpening(false);
     }
   };
 
@@ -136,10 +171,18 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
       <button
         type="button"
         onClick={handleDownload}
-        disabled={downloading}
+        disabled={downloading || opening}
         className="w-full rounded-2xl bg-slate-900 px-4 py-3 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {downloading ? "正在生成图片..." : "下载结果图"}
+      </button>
+      <button
+        type="button"
+        onClick={handleOpenImagePage}
+        disabled={downloading || opening}
+        className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {opening ? "正在打开图片..." : "打开图片页保存（iPhone推荐）"}
       </button>
       {downloadHint && <p className="text-xs text-slate-500">{downloadHint}</p>}
       {downloadError && <p className="text-xs text-rose-500">{downloadError}</p>}

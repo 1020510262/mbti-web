@@ -23,6 +23,7 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
     setDownloadHint("");
     let captureNode: HTMLDivElement | null = null;
     let objectUrl = "";
+    let popup: Window | null = null;
     try {
       // Clone to an offscreen node so screenshot size is stable and won't be clipped by viewport/layout state.
       captureNode = ref.current.cloneNode(true) as HTMLDivElement;
@@ -60,6 +61,8 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
 
       objectUrl = URL.createObjectURL(blob);
       const filename = `MBTI-${type}.png`;
+      // Keep a popup handle created by user interaction to avoid async popup blocking on some browsers.
+      popup = window.open("", "_blank", "noopener,noreferrer");
 
       // Fix iOS Safari download issue: prefer native share sheet; fallback to opening image in new tab for long-press save.
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -67,14 +70,16 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
         const file = new File([blob], filename, { type: "image/png" });
         if (navigator.share && navigator.canShare?.({ files: [file] })) {
           await navigator.share({ files: [file], title: filename });
-          URL.revokeObjectURL(objectUrl);
-          objectUrl = "";
+          window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
           return;
         }
-        window.open(objectUrl, "_blank", "noopener,noreferrer");
+        if (popup) {
+          popup.location.href = objectUrl;
+        } else {
+          window.open(objectUrl, "_blank", "noopener,noreferrer");
+        }
         setDownloadHint("已在新页面打开图片，请长按图片后选择“存储到照片”。");
         window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-        objectUrl = "";
         return;
       }
 
@@ -85,8 +90,11 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(objectUrl);
-      objectUrl = "";
+      // Delay URL revoke to avoid race where some browsers cancel download if revoked too early.
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 15_000);
+      if (popup && !popup.closed) {
+        popup.close();
+      }
     } catch (error) {
       // Fix Bug #2: explicit error handling with user-visible feedback.
       console.error("[share-card] download failed", error);
@@ -94,12 +102,13 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
       if (typeof window !== "undefined") {
         window.alert("生成图片失败，请稍后重试或直接截图保存。");
       }
+      if (popup && !popup.closed && objectUrl) {
+        popup.location.href = objectUrl;
+        setDownloadHint("浏览器拦截了直接下载，已打开图片页，请长按或右键保存。");
+      }
     } finally {
       if (captureNode && captureNode.parentNode) {
         captureNode.parentNode.removeChild(captureNode);
-      }
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
       }
       setDownloading(false);
     }

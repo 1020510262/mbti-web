@@ -6,8 +6,8 @@ export const MODEL_CONFIG = {
   timeoutMs: Number(process.env.MODEL_TIMEOUT_MS ?? process.env.NEXT_PUBLIC_MODEL_TIMEOUT_MS ?? 30000),
   maxTokensBasic: Number(process.env.MODEL_MAX_TOKENS_BASIC ?? 1100),
   maxTokensAdvanced: Number(process.env.MODEL_MAX_TOKENS_ADVANCED ?? 1700),
-  retryCount: Number(process.env.MODEL_RETRY_COUNT ?? 1),
-  retryBackoffMs: Number(process.env.MODEL_RETRY_BACKOFF_MS ?? 800),
+  retryCount: Number(process.env.MODEL_RETRY_COUNT ?? 2),
+  retryBackoffMs: Number(process.env.MODEL_RETRY_BACKOFF_MS ?? 1200),
   forceJsonMode: process.env.MODEL_FORCE_JSON_MODE !== "false",
   disableThinking: process.env.MODEL_DISABLE_THINKING !== "false"
 } as const;

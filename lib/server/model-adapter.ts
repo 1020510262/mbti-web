@@ -16,13 +16,32 @@ function parseModelJson(content: unknown): AIReportContent {
     throw new Error("invalid_model_content_type");
   }
 
+  const raw = content.trim();
+
+  // Prefer fenced JSON block if model returns markdown.
+  const fenced = raw.match(/```json\s*([\s\S]*?)\s*```/i) || raw.match(/```\s*([\s\S]*?)\s*```/i);
+  if (fenced?.[1]) {
+    return JSON.parse(fenced[1]) as AIReportContent;
+  }
+
   try {
-    return JSON.parse(content) as AIReportContent;
+    return JSON.parse(raw) as AIReportContent;
   } catch {
-    const start = content.indexOf("{");
-    const end = content.lastIndexOf("}");
+    // Try to locate most likely JSON payload by key anchor.
+    const anchor = raw.indexOf("\"overallProfile\"");
+    if (anchor >= 0) {
+      const start = raw.lastIndexOf("{", anchor);
+      const end = raw.lastIndexOf("}");
+      if (start >= 0 && end > start) {
+        return JSON.parse(raw.slice(start, end + 1)) as AIReportContent;
+      }
+    }
+
+    // Fallback: greedy first/last braces.
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
     if (start >= 0 && end > start) {
-      return JSON.parse(content.slice(start, end + 1)) as AIReportContent;
+      return JSON.parse(raw.slice(start, end + 1)) as AIReportContent;
     }
     throw new Error("invalid_model_json");
   }

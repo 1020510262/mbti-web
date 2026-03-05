@@ -51,6 +51,15 @@ async function apiGet<T>(path: string): Promise<T> {
   return json.data as T;
 }
 
+async function withOneRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    return fn();
+  }
+}
+
 export async function createOrder(params: {
   productType: "basic" | "advanced";
   provider: PaymentProvider;
@@ -82,20 +91,24 @@ export async function confirmPayment(orderNo: string, provider: PaymentProvider)
 }
 
 export async function generateBasicReport(orderNo: string): Promise<AIReport> {
-  const basic = await apiPost<{ reportNo: string }>("/api/ai/generate-basic-report", {
-    orderNo,
-    idempotencyKey: `gen_basic_${orderNo}`
-  });
+  const basic = await withOneRetry(() =>
+    apiPost<{ reportNo: string }>("/api/ai/generate-basic-report", {
+      orderNo,
+      idempotencyKey: `gen_basic_${orderNo}`
+    })
+  );
 
   return apiGet<AIReport>(`/api/report/${basic.reportNo}`);
 }
 
 export async function generateAdvancedReport(orderNo: string, profileInput: ProfileInput): Promise<AIReport> {
-  const advanced = await apiPost<{ reportNo: string }>("/api/ai/generate-advanced-report", {
-    orderNo,
-    profileInput,
-    idempotencyKey: `gen_advanced_${orderNo}`
-  });
+  const advanced = await withOneRetry(() =>
+    apiPost<{ reportNo: string }>("/api/ai/generate-advanced-report", {
+      orderNo,
+      profileInput,
+      idempotencyKey: `gen_advanced_${orderNo}`
+    })
+  );
 
   return apiGet<AIReport>(`/api/report/${advanced.reportNo}`);
 }

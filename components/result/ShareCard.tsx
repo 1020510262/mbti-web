@@ -156,15 +156,16 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.35 }}
-        className="relative overflow-hidden rounded-3xl border border-white/70 bg-[radial-gradient(circle_at_top_left,#f472b6_0%,#7dd3fc_42%,#fff8ed_100%)] p-6 shadow-[0_14px_36px_rgba(15,23,42,0.12)]"
+        // Fix: avoid Tailwind color-mix/oklab tokens for html2canvas compatibility.
+        className="relative overflow-hidden rounded-3xl border border-[rgba(255,255,255,0.7)] bg-[radial-gradient(circle_at_top_left,#f472b6_0%,#7dd3fc_42%,#fff8ed_100%)] p-6 shadow-[0_14px_36px_rgba(15,23,42,0.12)]"
       >
-        <div className="absolute -right-9 -top-9 h-24 w-24 rounded-full bg-white/45" />
-        <div className="absolute -bottom-10 -left-10 h-28 w-28 rounded-full bg-sky-100/70" />
+        <div className="absolute -right-9 -top-9 h-24 w-24 rounded-full bg-[rgba(255,255,255,0.45)]" />
+        <div className="absolute -bottom-10 -left-10 h-28 w-28 rounded-full bg-[rgba(224,242,254,0.7)]" />
         <p className="text-sm text-slate-700">我的MBTI测试结果</p>
         <h3 className="mt-2 text-4xl font-black text-slate-900">{type}</h3>
         <p className="mt-1 text-lg font-semibold text-slate-700">{title}</p>
         <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{summary}</p>
-        <div className="mt-5 inline-flex rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-slate-700">
+        <div className="mt-5 inline-flex rounded-full bg-[rgba(255,255,255,0.8)] px-3 py-1 text-xs font-semibold text-slate-700">
           MBTI FUN TEST 2026
         </div>
       </motion.div>

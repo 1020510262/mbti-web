@@ -216,7 +216,7 @@ export function ShareCard({ type, title, summary }: ShareCardProps) {
         disabled={downloading || opening}
         className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {opening ? "正在生成预览..." : "当前页预览保存（iPhone推荐）"}
+        {opening ? "正在生成预览..." : "当前页预览保存"}
       </button>
 
       {downloadHint && <p className="text-xs text-slate-500">{downloadHint}</p>}

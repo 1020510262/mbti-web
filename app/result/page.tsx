@@ -43,7 +43,123 @@ const occupationCategories = [
 const lifeStages = ["学生", "求职期", "在职上升期", "转型期", "管理期"];
 const concerns = ["职业规划", "晋升加薪", "转行选择", "工作与生活平衡", "沟通协作", "执行效率"];
 
+function wrapReportLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const chars = text.replace(/\s+/g, " ").trim().split("");
+  const lines: string[] = [];
+  let line = "";
+
+  for (const ch of chars) {
+    const next = line + ch;
+    if (ctx.measureText(next).width > maxWidth) {
+      if (line) lines.push(line);
+      line = ch;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function drawSection(
+  ctx: CanvasRenderingContext2D,
+  title: string,
+  body: string,
+  x: number,
+  y: number,
+  width: number
+): number {
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "700 36px 'PingFang SC','Microsoft YaHei',sans-serif";
+  ctx.fillText(title, x, y);
+
+  ctx.fillStyle = "#334155";
+  ctx.font = "500 30px 'PingFang SC','Microsoft YaHei',sans-serif";
+  const lines = wrapReportLines(ctx, body, width);
+  lines.forEach((line, idx) => {
+    ctx.fillText(line, x, y + 54 + idx * 42);
+  });
+  return y + 54 + lines.length * 42 + 28;
+}
+
+function buildReportCanvas(title: string, report: AIReport): HTMLCanvasElement {
+  const width = 1240;
+  const height = 2200;
+  const padding = 70;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("report canvas context missing");
+
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  bg.addColorStop(0, "#f8fafc");
+  bg.addColorStop(0.55, "#eff6ff");
+  bg.addColorStop(1, "#fff7ed");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.beginPath();
+  ctx.roundRect(36, 36, width - 72, height - 72, 34);
+  ctx.fill();
+
+  ctx.fillStyle = "#64748b";
+  ctx.font = "500 28px 'PingFang SC','Microsoft YaHei',sans-serif";
+  ctx.fillText("MBTI AI 深度报告", padding, 120);
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "800 50px 'PingFang SC','Microsoft YaHei',sans-serif";
+  ctx.fillText(title, padding, 192);
+
+  ctx.fillStyle = "#64748b";
+  ctx.font = "500 24px 'PingFang SC','Microsoft YaHei',sans-serif";
+  ctx.fillText(`报告编号：${report.reportNo}`, padding, 236);
+
+  const bodyWidth = width - padding * 2;
+  let y = 320;
+  y = drawSection(ctx, "总体画像", report.content.overallProfile, padding, y, bodyWidth);
+  y = drawSection(ctx, "职业倾向", report.content.careerTendency, padding, y, bodyWidth);
+  y = drawSection(ctx, "未来3个月行动建议", report.content.next3MonthsActions.join("；"), padding, y, bodyWidth);
+  y = drawSection(ctx, "风险提醒", report.content.riskAlerts, padding, y, bodyWidth);
+  y = drawSection(ctx, "鼓励总结", report.content.encouragement, padding, y, bodyWidth);
+
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "500 22px 'PingFang SC','Microsoft YaHei',sans-serif";
+  ctx.fillText("仅供娱乐与自我探索，不构成专业建议", padding, Math.min(y + 24, height - 60));
+
+  return canvas;
+}
+
 function ReportBlock({ title, report }: { title: string; report: AIReport }) {
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
+
+  const handleDownloadReportImage = async () => {
+    setDownloading(true);
+    setDownloadError("");
+    try {
+      // Use the same technology as existing share export: canvas draw + blob download.
+      const canvas = buildReportCanvas(title, report);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+      if (!blob) throw new Error("report canvas toBlob failed");
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${title}-${report.reportNo}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 15_000);
+    } catch (error) {
+      console.error("[report-block] download report image failed", error);
+      setDownloadError("下载报告图失败，请稍后重试。");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
       <p className="text-xs text-slate-500">{title} · 报告编号 {report.reportNo}</p>
@@ -73,6 +189,17 @@ function ReportBlock({ title, report }: { title: string; report: AIReport }) {
           <p>{report.content.encouragement}</p>
         </section>
       </div>
+      <div className="mt-4 flex justify-center">
+        <button
+          type="button"
+          onClick={handleDownloadReportImage}
+          disabled={downloading}
+          className="rounded-2xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {downloading ? "正在生成报告图..." : "下载报告图"}
+        </button>
+      </div>
+      {downloadError && <p className="mt-2 text-center text-xs text-rose-500">{downloadError}</p>}
     </div>
   );
 }
